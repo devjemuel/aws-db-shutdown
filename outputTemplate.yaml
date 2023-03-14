@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Automatic database shut down and start up Lambda functions
+Parameters:
+  InstanceID:
+    Type: String
+    Default: hrservice
+  InstanceARN:
+    Type: String
+    Default: arn:aws:rds:ap-southeast-1:905103015627:db:hrservice
+Globals:
+  Function:
+    MemorySize: 128
+    Timeout: 3
+    Handler: app.lambdaHandler
+    Runtime: nodejs16.x
+    Environment:
+      Variables:
+        INSTANCE_IDENTIFIER:
+          Ref: InstanceID
+Resources:
+  DBShutDownFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://top-aws-db-shutdown/fe8a499045abe85711d9b729bb28c9af
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - rds:StopDBInstance
+          Resource:
+            Ref: InstanceARN
+      Events:
+        Schedule1:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 12 ? * MON-FRI *)
+      DeadLetterQueue:
+        Type: SNS
+        TargetArn:
+          Ref: DBFunctionsDeadLetterTopic
+    Metadata:
+      SamResourceId: DBShutDownFunction
+  DBStartUpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://top-aws-db-shutdown/eae3da522d081088449e78fb4b4f5b05
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - rds:StartDBInstance
+          Resource:
+            Ref: InstanceARN
+      Events:
+        Schedule1:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 21 ? * MON-FRI *)
+      DeadLetterQueue:
+        Type: SNS
+        TargetArn:
+          Ref: DBFunctionsDeadLetterTopic
+    Metadata:
+      SamResourceId: DBStartUpFunction
+  DBFunctionsDeadLetterTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Endpoint: dev.jemueldejesus@gmail.com
+        Protocol: email
+    Metadata:
+      SamResourceId: DBFunctionsDeadLetterTopic
